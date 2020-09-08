@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Trace Voronoi</title>
+<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+<link rel="stylesheet" type="text/css" href="./css/mapstyle.css" />
+<script src="https://api.mapbox.com/mapbox-gl-js/v1.11.1/mapbox-gl.js"></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v1.11.1/mapbox-gl.css" rel="stylesheet" />
+<script src='https://npmcdn.com/@turf/turf/turf.min.js'></script>
+<style>
+
+body {
+    font-family: sans-serif;
+}
+
+#mapWrap, .credit {
+    width:100%;
+    display: block;
+    font-family: sans-serif;
+    color:#555;
+    max-width:1200px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.credit {
+    line-height: 6px;
+    font-size: 12px;
+    margin-top:20px;
+    color:#888;
+}
+
+.credit a {
+    text-decoration:none;
+    color: coral;
+}
+
+</style>
+</head>
+<body>
+<div id="mapWrap">
+    <div class="column left">
+        <h2>Trace Voronoi Polygons</h2>
+        <p>I've always been fascinated in the visualization of <a href="https://www.nationalgeographic.com/magazine/2018/03/bird-migration-interactive-maps/">animal movement patterns</a> and <a href="https://www.facebook.com/VoyageursWolfProject/posts/347276326097723?__tn__=-R">established natural territories</a>.</p>
+        <p>I wanted to show the evolution of these hypothetical changing territories. For this visualization, I'm randomly moving points on a 2D surface and generating voronoi polygons on every move. I used <a href="http://turfjs.org/" target="blank">Turf.js</a> to dynamically change these voronoi boundaries.</p>
+        <div id="animatePeaks">Pause Movement</div>
+    </div>
+    <div class="column right">
+        <div id="map"></div>
+    </div>
+</div>
+<div class="credit">
+    <!-- <p>Data:</p> -->
+    <p>By: <a href="http://www.mapto.ca/" target="_blank">MapTO</a></p>
+    <p>Code: <a href="https://github.com/willymaps/tracevoronoi" target="_blank">Github</a></p>
+</div>
+
+</style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+
+var mapArray = [];
+var mapLoop;
+var initLoad = true;
+var animateState = true;
+var numPoints = 200;
+var mapBoundsXOne = 43.6;
+var mapBoundsYOne = -79.39;
+var mapBoundsXTwo = 43.7;
+var mapBoundsYTwo = -79.2;
+var mapBounds = [[mapBoundsYOne, mapBoundsXOne],[mapBoundsYTwo, mapBoundsXTwo]];
+
+document.getElementById("animatePeaks").addEventListener("click", displayPeaks);
+
+mapboxgl.accessToken = 'pk.eyJ1Ijoid2lsbGlhbWJlbmRhdmlzIiwiYSI6IlVrb3BGVzQifQ.jeHxDCnpXXvAXKfAFEYG-A';
+var map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/williambendavis/cjry02c8y0yn21fp97zhaysip',
+    center: [-79.298493, 43.656777],
+    zoom:13
+});
+
+map.on('load', function() {
+
+    map.fitBounds(mapBounds, {padding:30});
+
+    for (i=0;i < numPoints;i++) {
+
+        let randomX = (Math.random() * (mapBoundsXTwo - mapBoundsXOne) + mapBoundsXOne).toFixed(8);
+        let randomY = (Math.random() * (mapBoundsYTwo - mapBoundsYOne) + mapBoundsYOne).toFixed(8);
+
+        let x = parseFloat(randomX);
+        let y = parseFloat(randomY);
+
+
+        let point = turf.point([y, x]);
+
+        mapArray.push(point);
+
+        if (i == numPoints-1) {
+            let pointCollection = turf.featureCollection(mapArray);
+            buildPoints(pointCollection);
+        }
+    }
+
+});
+
+function buildPoints(points) {
+
+    map.addSource('points', {
+        type: 'geojson',
+        data: points
+    });
+
+    map.addLayer({
+        'id': 'points',
+        'type': 'circle',
+        'source': 'points',
+        'paint': {
+            'circle-radius': 2,
+            'circle-color': '#111'
+        }
+    });
+
+    pointAnimation();
+
+}
+
+// btn function
+function displayPeaks() {
+    if (animateState == true) {
+        document.getElementById('animatePeaks').innerHTML = "Start Movement";
+        console.log('clicked true');
+        animateState = false;
+        pointStop();
+    } else {
+        animateState = true;
+        console.log('clicked false');
+        document.getElementById('animatePeaks').innerHTML = "Pause Movement";
+        pointAnimation();
+    }
+}
+
+function pointAnimation() {
+
+    let voronoiArray = [];
+    let counter = 0;
+
+    mapLoop = setInterval(
+        function(){ 
+            for (let i = 0; i < mapArray.length; i++) {
+
+                let coords = mapArray[i].geometry.coordinates;
+                let coordsX = coords[1];
+                let coordsY = coords[0];
+
+                let newCoords = generateRandom(i, coordsX, coordsY);
+
+                let x = parseFloat(newCoords[0]);
+                let y = parseFloat(newCoords[1]);
+
+                let point = turf.point([y, x]);
+                let bboxCoords = [mapBoundsYOne, mapBoundsXOne, mapBoundsYTwo, mapBoundsXTwo];
+                let poly = turf.bboxPolygon(bboxCoords);
+                let within = turf.booleanWithin(point, poly);
+
+                let options = {
+                  bbox: bboxCoords
+                };
+                
+                if (within) {
+                    mapArray[i].geometry.coordinates = [];
+                    mapArray[i].geometry.coordinates = [y, x];    
+                }
+
+                if (i === mapArray.length-1) {
+                    counter++
+                    let pointCollection = turf.featureCollection(mapArray);
+                    let voronoiPolygons = turf.voronoi(pointCollection, options);
+
+                    if (counter <= 15) {
+                        voronoiArray = voronoiArray.concat(voronoiPolygons.features);                        
+                    } else {
+                        voronoiArray.splice(0,200);
+                        voronoiArray = voronoiArray.concat(voronoiPolygons.features);
+                    }
+
+                    if (initLoad) {
+                        addVoronoi(voronoiPolygons);
+                        initLoad = false;    
+                    } else {
+                        let voronoiCollection = turf.featureCollection(voronoiArray);
+                        map.getSource('polygon').setData(voronoiCollection);
+                        map.getSource('points').setData(pointCollection);
+                    }
+                }
+            }
+        }, 
+        10
+    );
+}
+
+function addVoronoi(voronoi) {
+
+    map.addSource('polygon', {
+        'type': 'geojson',
+        'data': voronoi
+    });
+
+    // map.addLayer({
+    //     'id': 'voronoi',
+    //     'type': 'fill',
+    //     'source': 'polygon',
+    //     'layout': {},
+    //     'paint': {
+    //         'fill-color': '#088',
+    //         'fill-opacity': 0.1,
+    //         'fill-outline-color': '#fff'
+    //         // 'line-width': 3
+    //     }
+    // });
+
+    map.addLayer({
+        'id': 'voronoi',
+        'type': 'line',
+        'source': 'polygon',
+        'layout': {
+            'line-join': 'round',
+            'line-cap': 'round'
+        },
+        'paint': {
+            'line-color': '#111',
+            'line-width': 0.5,
+            'line-opacity': 0.08,
+        }
+    });
+}
+
+function pointStop() {
+    clearInterval(mapLoop);
+}
+
+function generateRandom(i, cox, coy) {
+    let randomNum = Math.random();
+    if (randomNum<=0.25) {
+        let newCoordsX = cox + 0.0001;
+        let newCoordsY = coy - 0.0001;
+        return [newCoordsX, newCoordsY];
+    } else if (randomNum <= 0.5) {
+        let newCoordsX = cox - 0.0001;
+        let newCoordsY = coy + 0.0001;
+        return [newCoordsX, newCoordsY];
+    } else if (randomNum <= 0.75) {
+        let newCoordsX = cox + 0.0001;
+        let newCoordsY = coy + 0.0001;
+        return [newCoordsX, newCoordsY];
+    } else {
+        let newCoordsX = cox - 0.0001;
+        let newCoordsY = coy - 0.0001;
+        return [newCoordsX, newCoordsY];
+    }
+}
+
+</script>
+</body>
+</html>
