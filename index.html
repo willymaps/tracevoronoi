@@ -148,6 +148,13 @@ function pointAnimation() {
 
     let voronoiArray = [];
     let counter = 0;
+    let w = window.innerWidth;
+
+    if (w <= 1000) {
+        speed = 100;
+    } else {
+        speed = 10
+    }
 
     mapLoop = setInterval(
         function(){ 
@@ -199,7 +206,7 @@ function pointAnimation() {
                 }
             }
         }, 
-        10
+        speed
     );
 }
 
