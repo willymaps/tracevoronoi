@@ -181,7 +181,7 @@ function pointAnimation() {
                     let pointCollection = turf.featureCollection(mapArray);
                     let voronoiPolygons = turf.voronoi(pointCollection, options);
 
-                    if (counter <= 15) {
+                    if (counter <= 10) {
                         voronoiArray = voronoiArray.concat(voronoiPolygons.features);                        
                     } else {
                         voronoiArray.splice(0,200);
